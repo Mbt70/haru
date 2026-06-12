@@ -7,29 +7,40 @@ import { dayRange, formatDateHeader, todayStr } from "@/lib/dates";
 import { useDataChanged } from "@/lib/events";
 import { TaskItem } from "@/components/task-item";
 import { TaskEditSheet } from "@/components/task-edit-sheet";
+import { PlanCard, FocusBanner } from "@/components/today/plan-card";
+import { ReviewCard, DoneFooter } from "@/components/today/review-card";
+import { MorningPlanSheet } from "@/components/today/morning-plan-sheet";
+import { EveningReviewSheet } from "@/components/today/evening-review-sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LogOut, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 type Task = Tables<"tasks">;
+type DailyLog = Tables<"daily_logs">;
 
 export default function TodayPage() {
   const supabase = useMemo(() => createClient(), []);
+  const [log, setLog] = useState<DailyLog | null>(null);
   const [openTasks, setOpenTasks] = useState<Task[]>([]);
   const [doneTasks, setDoneTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Task | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const load = useCallback(async () => {
-    const { start, end } = dayRange(todayStr());
-    const [open, done] = await Promise.all([
+    const t = todayStr();
+    const { start, end } = dayRange(t);
+    const [logRes, open, done] = await Promise.all([
+      supabase.from("daily_logs").select("*").eq("log_date", t).maybeSingle(),
       supabase
         .from("tasks")
         .select("*")
         .is("completed_at", null)
+        .or(`planned_for.eq.${t},due_date.lte.${t}`)
         .order("priority")
         .order("created_at", { ascending: false }),
       supabase
@@ -39,6 +50,7 @@ export default function TodayPage() {
         .lt("completed_at", end)
         .order("completed_at", { ascending: false }),
     ]);
+    setLog(logRes.data ?? null);
     if (open.data) setOpenTasks(open.data);
     if (done.data) setDoneTasks(done.data);
     setLoading(false);
@@ -51,7 +63,7 @@ export default function TodayPage() {
   useDataChanged(
     useCallback(
       (table) => {
-        if (table === "tasks") void load();
+        if (table === "tasks" || table === "daily_logs") void load();
       },
       [load],
     ),
@@ -104,33 +116,45 @@ export default function TodayPage() {
     window.location.href = "/login";
   }
 
+  const planned = !!log?.planned_at;
+  const reviewed = !!log?.reviewed_at;
+  const evening = new Date().getHours() >= 18;
+  const leftoverTasks = openTasks.filter((t) => t.planned_for === todayStr());
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <header className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">오늘</h1>
-          <p className="text-sm text-muted-foreground">{formatDateHeader()}</p>
+          <p className="text-sm text-muted-foreground" suppressHydrationWarning>
+            {formatDateHeader()}
+          </p>
         </div>
         <Button variant="ghost" size="icon" onClick={signOut} aria-label="로그아웃">
           <LogOut className="size-4" />
         </Button>
       </header>
 
-      <form onSubmit={addTask} className="flex gap-2">
-        <Input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="오늘 할 일 추가..."
-        />
-        <Button type="submit" size="icon" aria-label="추가">
-          <Plus className="size-4" />
-        </Button>
-      </form>
-
       {loading ? (
         <p className="text-sm text-muted-foreground">불러오는 중...</p>
       ) : (
-        <div className="space-y-6">
+        <>
+          {!planned && <PlanCard onClick={() => setPlanOpen(true)} />}
+          {planned && (
+            <FocusBanner focus={log!.focus} onEdit={() => setPlanOpen(true)} />
+          )}
+
+          <form onSubmit={addTask} className="flex gap-2">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="오늘 할 일 추가..."
+            />
+            <Button type="submit" size="icon" aria-label="추가">
+              <Plus className="size-4" />
+            </Button>
+          </form>
+
           <ul className="space-y-1">
             {openTasks.map((task) => (
               <TaskItem
@@ -142,7 +166,8 @@ export default function TodayPage() {
             ))}
             {openTasks.length === 0 && (
               <p className="px-2 text-sm text-muted-foreground">
-                할 일이 없어요. 하나 추가해볼까요?
+                오늘 할 일이 없어요.
+                {!planned && " 계획부터 세워볼까요?"}
               </p>
             )}
           </ul>
@@ -164,10 +189,34 @@ export default function TodayPage() {
               </ul>
             </div>
           )}
-        </div>
+
+          {planned && !reviewed && (
+            <ReviewCard evening={evening} onClick={() => setReviewOpen(true)} />
+          )}
+          {reviewed && (
+            <DoneFooter
+              reflection={log!.reflection}
+              onEdit={() => setReviewOpen(true)}
+            />
+          )}
+        </>
       )}
 
       <TaskEditSheet task={selected} open={editOpen} onOpenChange={setEditOpen} />
+      <MorningPlanSheet
+        open={planOpen}
+        onOpenChange={setPlanOpen}
+        log={log}
+        onSaved={load}
+      />
+      <EveningReviewSheet
+        open={reviewOpen}
+        onOpenChange={setReviewOpen}
+        log={log}
+        doneTasks={doneTasks}
+        leftoverTasks={leftoverTasks}
+        onSaved={load}
+      />
     </div>
   );
 }
