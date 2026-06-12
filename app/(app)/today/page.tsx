@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/database.types";
-import { dayRange, formatDateHeader, todayStr } from "@/lib/dates";
+import { dateAfterDays, dayRange, formatDateHeader, todayStr } from "@/lib/dates";
 import { useDataChanged } from "@/lib/events";
 import { TaskItem } from "@/components/task-item";
 import { TaskEditSheet } from "@/components/task-edit-sheet";
@@ -13,6 +13,10 @@ import { MorningPlanSheet } from "@/components/today/morning-plan-sheet";
 import { EveningReviewSheet } from "@/components/today/evening-review-sheet";
 import { OpenSessionBanner } from "@/components/today/open-session-banner";
 import { CloseSessionSheet } from "@/components/sessions/close-session-sheet";
+import {
+  DeadlineStrip,
+  type DeadlineItem,
+} from "@/components/today/deadline-strip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LogOut, Plus } from "lucide-react";
@@ -37,11 +41,14 @@ export default function TodayPage() {
   const [aiTodayCount, setAiTodayCount] = useState(0);
   const [closingSession, setClosingSession] = useState<AiSession | null>(null);
   const [closeOpen, setCloseOpen] = useState(false);
+  const [deadlines, setDeadlines] = useState<DeadlineItem[]>([]);
 
   const load = useCallback(async () => {
     const t = todayStr();
     const { start, end } = dayRange(t);
-    const [logRes, open, done, sessions, aiCount] = await Promise.all([
+    const horizon = dateAfterDays(14);
+    const [logRes, open, done, sessions, aiCount, dueTasks, dueMs] =
+      await Promise.all([
       supabase.from("daily_logs").select("*").eq("log_date", t).maybeSingle(),
       supabase
         .from("tasks")
@@ -66,12 +73,46 @@ export default function TodayPage() {
         .select("id", { count: "exact", head: true })
         .gte("started_at", start)
         .lt("started_at", end),
+      supabase
+        .from("tasks")
+        .select("id, title, due_date")
+        .is("completed_at", null)
+        .gt("due_date", t)
+        .lte("due_date", horizon)
+        .order("due_date")
+        .limit(3),
+      supabase
+        .from("milestones")
+        .select("id, title, due_date, goals(title)")
+        .is("completed_at", null)
+        .gte("due_date", t)
+        .lte("due_date", horizon)
+        .order("due_date")
+        .limit(3),
     ]);
     setLog(logRes.data ?? null);
     if (open.data) setOpenTasks(open.data);
     if (done.data) setDoneTasks(done.data);
     if (sessions.data) setOpenSessions(sessions.data);
     setAiTodayCount(aiCount.count ?? 0);
+    const items: DeadlineItem[] = [
+      ...(dueTasks.data ?? []).map((x) => ({
+        id: x.id,
+        kind: "task" as const,
+        title: x.title,
+        date: x.due_date!,
+      })),
+      ...(dueMs.data ?? []).map((m) => ({
+        id: m.id,
+        kind: "milestone" as const,
+        title: m.title,
+        date: m.due_date!,
+        context: (m.goals as { title: string } | null)?.title ?? null,
+      })),
+    ]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, 3);
+    setDeadlines(items);
     setLoading(false);
   }, [supabase]);
 
@@ -79,19 +120,8 @@ export default function TodayPage() {
     void load();
   }, [load]);
 
-  useDataChanged(
-    useCallback(
-      (table) => {
-        if (
-          table === "tasks" ||
-          table === "daily_logs" ||
-          table === "ai_sessions"
-        )
-          void load();
-      },
-      [load],
-    ),
-  );
+  // 모든 테이블 변경이 Today 화면 어딘가에 반영된다
+  useDataChanged(useCallback(() => void load(), [load]));
 
   async function addTask(e: React.FormEvent) {
     e.preventDefault();
@@ -222,6 +252,8 @@ export default function TodayPage() {
               </ul>
             </div>
           )}
+
+          <DeadlineStrip items={deadlines} />
 
           {planned && !reviewed && (
             <ReviewCard evening={evening} onClick={() => setReviewOpen(true)} />

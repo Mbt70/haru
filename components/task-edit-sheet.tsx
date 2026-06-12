@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/database.types";
 import { emitDataChanged } from "@/lib/events";
@@ -11,6 +11,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -35,7 +42,20 @@ function EditForm({ task, onClose }: { task: Task; onClose: () => void }) {
   const [dueDate, setDueDate] = useState(task.due_date ?? "");
   const [plannedFor, setPlannedFor] = useState(task.planned_for ?? "");
   const [priority, setPriority] = useState(task.priority);
+  const [goalId, setGoalId] = useState(task.goal_id ?? "none");
+  const [goals, setGoals] = useState<{ id: string; title: string }[]>([]);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("goals")
+        .select("id, title")
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
+      if (data) setGoals(data);
+    })();
+  }, [supabase]);
 
   async function save() {
     const t = title.trim();
@@ -52,6 +72,7 @@ function EditForm({ task, onClose }: { task: Task; onClose: () => void }) {
         due_date: dueDate || null,
         planned_for: plannedFor || null,
         priority,
+        goal_id: goalId === "none" ? null : goalId,
       })
       .eq("id", task.id);
     setSaving(false);
@@ -138,6 +159,24 @@ function EditForm({ task, onClose }: { task: Task; onClose: () => void }) {
           ))}
         </div>
       </div>
+      {goals.length > 0 && (
+        <div className="space-y-2">
+          <Label>목표</Label>
+          <Select value={goalId} onValueChange={setGoalId}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="목표 없음" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">목표 없음</SelectItem>
+              {goals.map((g) => (
+                <SelectItem key={g.id} value={g.id}>
+                  {g.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="flex gap-2 pt-1">
         <Button variant="ghost" className="text-destructive" onClick={remove}>
           삭제

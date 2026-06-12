@@ -17,6 +17,11 @@ export function tomorrowStr(): string {
   return format(addDays(new Date(), 1), "yyyy-MM-dd");
 }
 
+/** 오늘부터 n일 뒤 날짜 문자열 */
+export function dateAfterDays(n: number): string {
+  return format(addDays(new Date(), n), "yyyy-MM-dd");
+}
+
 /** "2026-06-15" → "D-3", 오늘이면 "D-DAY", 지났으면 "D+2" */
 export function dday(dateStr: string): string {
   const diff = differenceInCalendarDays(parseISO(dateStr), new Date());

@@ -33,6 +33,7 @@ function PlanForm({
   const supabase = useMemo(() => createClient(), []);
   const [focus, setFocus] = useState(log?.focus ?? "");
   const [candidates, setCandidates] = useState<Task[]>([]);
+  const [goalTitles, setGoalTitles] = useState<Map<string, string>>(new Map());
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [initialPlanned, setInitialPlanned] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -42,14 +43,18 @@ function PlanForm({
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("tasks")
-        .select("*")
-        .is("completed_at", null)
-        .order("due_date", { ascending: true, nullsFirst: false })
-        .order("priority")
-        .order("created_at", { ascending: false });
-      if (data) {
+      const [tasksRes, goalsRes] = await Promise.all([
+        supabase
+          .from("tasks")
+          .select("*")
+          .is("completed_at", null)
+          .order("due_date", { ascending: true, nullsFirst: false })
+          .order("priority")
+          .order("created_at", { ascending: false }),
+        supabase.from("goals").select("id, title"),
+      ]);
+      if (tasksRes.data) {
+        const data = tasksRes.data;
         // 지연된 마감을 맨 위로
         const sorted = [
           ...data.filter((x) => x.due_date && x.due_date < t),
@@ -61,6 +66,9 @@ function PlanForm({
         );
         setChecked(new Set(planned));
         setInitialPlanned(planned);
+      }
+      if (goalsRes.data) {
+        setGoalTitles(new Map(goalsRes.data.map((g) => [g.id, g.title])));
       }
       setLoading(false);
     })();
@@ -139,8 +147,13 @@ function PlanForm({
                       checked={checked.has(task.id)}
                       onCheckedChange={() => toggle(task.id)}
                     />
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      {task.title}
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate text-sm">{task.title}</span>
+                      {task.goal_id && goalTitles.has(task.goal_id) && (
+                        <span className="truncate text-[11px] text-muted-foreground">
+                          {goalTitles.get(task.goal_id)}
+                        </span>
+                      )}
                     </span>
                     {task.due_date && (
                       <Badge
