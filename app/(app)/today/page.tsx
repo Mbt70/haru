@@ -11,6 +11,8 @@ import { PlanCard, FocusBanner } from "@/components/today/plan-card";
 import { ReviewCard, DoneFooter } from "@/components/today/review-card";
 import { MorningPlanSheet } from "@/components/today/morning-plan-sheet";
 import { EveningReviewSheet } from "@/components/today/evening-review-sheet";
+import { OpenSessionBanner } from "@/components/today/open-session-banner";
+import { CloseSessionSheet } from "@/components/sessions/close-session-sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LogOut, Plus } from "lucide-react";
@@ -18,6 +20,7 @@ import { toast } from "sonner";
 
 type Task = Tables<"tasks">;
 type DailyLog = Tables<"daily_logs">;
+type AiSession = Tables<"ai_sessions">;
 
 export default function TodayPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -30,11 +33,15 @@ export default function TodayPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [openSessions, setOpenSessions] = useState<AiSession[]>([]);
+  const [aiTodayCount, setAiTodayCount] = useState(0);
+  const [closingSession, setClosingSession] = useState<AiSession | null>(null);
+  const [closeOpen, setCloseOpen] = useState(false);
 
   const load = useCallback(async () => {
     const t = todayStr();
     const { start, end } = dayRange(t);
-    const [logRes, open, done] = await Promise.all([
+    const [logRes, open, done, sessions, aiCount] = await Promise.all([
       supabase.from("daily_logs").select("*").eq("log_date", t).maybeSingle(),
       supabase
         .from("tasks")
@@ -49,10 +56,22 @@ export default function TodayPage() {
         .gte("completed_at", start)
         .lt("completed_at", end)
         .order("completed_at", { ascending: false }),
+      supabase
+        .from("ai_sessions")
+        .select("*")
+        .is("ended_at", null)
+        .order("started_at"),
+      supabase
+        .from("ai_sessions")
+        .select("id", { count: "exact", head: true })
+        .gte("started_at", start)
+        .lt("started_at", end),
     ]);
     setLog(logRes.data ?? null);
     if (open.data) setOpenTasks(open.data);
     if (done.data) setDoneTasks(done.data);
+    if (sessions.data) setOpenSessions(sessions.data);
+    setAiTodayCount(aiCount.count ?? 0);
     setLoading(false);
   }, [supabase]);
 
@@ -63,7 +82,12 @@ export default function TodayPage() {
   useDataChanged(
     useCallback(
       (table) => {
-        if (table === "tasks" || table === "daily_logs") void load();
+        if (
+          table === "tasks" ||
+          table === "daily_logs" ||
+          table === "ai_sessions"
+        )
+          void load();
       },
       [load],
     ),
@@ -144,6 +168,15 @@ export default function TodayPage() {
             <FocusBanner focus={log!.focus} onEdit={() => setPlanOpen(true)} />
           )}
 
+          <OpenSessionBanner
+            sessions={openSessions}
+            onClose={(session) => {
+              setClosingSession(session);
+              setCloseOpen(true);
+            }}
+          />
+
+
           <form onSubmit={addTask} className="flex gap-2">
             <Input
               value={title}
@@ -215,7 +248,13 @@ export default function TodayPage() {
         log={log}
         doneTasks={doneTasks}
         leftoverTasks={leftoverTasks}
+        aiSessionCount={aiTodayCount}
         onSaved={load}
+      />
+      <CloseSessionSheet
+        session={closingSession}
+        open={closeOpen}
+        onOpenChange={setCloseOpen}
       />
     </div>
   );
