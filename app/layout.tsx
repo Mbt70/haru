@@ -16,6 +16,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "하루",
   description: "태스크, 목표, AI 사용까지 — 나를 위한 하루 운영 시스템",
+  applicationName: "하루",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "하루",
+  },
 };
 
 export const viewport: Viewport = {

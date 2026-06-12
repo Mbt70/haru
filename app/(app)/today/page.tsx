@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/database.types";
 import { dayRange, formatDateHeader, todayStr } from "@/lib/dates";
+import { useDataChanged } from "@/lib/events";
+import { TaskItem } from "@/components/task-item";
+import { TaskEditSheet } from "@/components/task-edit-sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { LogOut, Plus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -18,6 +20,8 @@ export default function TodayPage() {
   const [doneTasks, setDoneTasks] = useState<Task[]>([]);
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Task | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
 
   const load = useCallback(async () => {
     const { start, end } = dayRange(todayStr());
@@ -44,6 +48,15 @@ export default function TodayPage() {
     void load();
   }, [load]);
 
+  useDataChanged(
+    useCallback(
+      (table) => {
+        if (table === "tasks") void load();
+      },
+      [load],
+    ),
+  );
+
   async function addTask(e: React.FormEvent) {
     e.preventDefault();
     const t = title.trim();
@@ -51,7 +64,7 @@ export default function TodayPage() {
     setTitle("");
     const { data, error } = await supabase
       .from("tasks")
-      .insert({ title: t })
+      .insert({ title: t, planned_for: todayStr() })
       .select()
       .single();
     if (error || !data) {
@@ -81,6 +94,11 @@ export default function TodayPage() {
     }
   }
 
+  function selectTask(task: Task) {
+    setSelected(task);
+    setEditOpen(true);
+  }
+
   async function signOut() {
     await supabase.auth.signOut();
     window.location.href = "/login";
@@ -102,7 +120,7 @@ export default function TodayPage() {
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="할 일 추가..."
+          placeholder="오늘 할 일 추가..."
         />
         <Button type="submit" size="icon" aria-label="추가">
           <Plus className="size-4" />
@@ -115,13 +133,12 @@ export default function TodayPage() {
         <div className="space-y-6">
           <ul className="space-y-1">
             {openTasks.map((task) => (
-              <li key={task.id} className="flex items-center gap-3 rounded-lg px-2 py-2.5">
-                <Checkbox
-                  checked={false}
-                  onCheckedChange={() => toggleTask(task, true)}
-                />
-                <span className="text-sm">{task.title}</span>
-              </li>
+              <TaskItem
+                key={task.id}
+                task={task}
+                onToggle={toggleTask}
+                onSelect={selectTask}
+              />
             ))}
             {openTasks.length === 0 && (
               <p className="px-2 text-sm text-muted-foreground">
@@ -137,21 +154,20 @@ export default function TodayPage() {
               </h2>
               <ul className="space-y-1">
                 {doneTasks.map((task) => (
-                  <li key={task.id} className="flex items-center gap-3 rounded-lg px-2 py-2.5">
-                    <Checkbox
-                      checked
-                      onCheckedChange={() => toggleTask(task, false)}
-                    />
-                    <span className="text-sm text-muted-foreground line-through">
-                      {task.title}
-                    </span>
-                  </li>
+                  <TaskItem
+                    key={task.id}
+                    task={task}
+                    onToggle={toggleTask}
+                    onSelect={selectTask}
+                  />
                 ))}
               </ul>
             </div>
           )}
         </div>
       )}
+
+      <TaskEditSheet task={selected} open={editOpen} onOpenChange={setEditOpen} />
     </div>
   );
 }
