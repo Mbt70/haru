@@ -91,3 +91,16 @@ create table public.push_subscriptions (
 alter table public.push_subscriptions enable row level security;
 create policy "owner_all" on public.push_subscriptions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- 6) reminder_prefs (알림 시간 설정) ------------------------------------
+create table public.reminder_prefs (
+  user_id      uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  morning_time text,
+  evening_time text,
+  last_morning date,
+  last_evening  date,
+  updated_at   timestamptz not null default now()
+);
+alter table public.reminder_prefs enable row level security;
+create policy "owner_all" on public.reminder_prefs
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

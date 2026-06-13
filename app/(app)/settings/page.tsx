@@ -11,6 +11,8 @@ import {
 } from "@/lib/push";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ChevronLeft, Bell, BellOff, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,6 +23,9 @@ export default function SettingsPage() {
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const [morning, setMorning] = useState("");
+  const [evening, setEvening] = useState("");
+  const [savingTimes, setSavingTimes] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -31,9 +36,35 @@ export default function SettingsPage() {
         const sub = await currentSubscription();
         setEnabled(!!sub);
       }
+      const { data } = await supabase
+        .from("reminder_prefs")
+        .select("morning_time, evening_time")
+        .maybeSingle();
+      if (data) {
+        setMorning(data.morning_time ?? "");
+        setEvening(data.evening_time ?? "");
+      }
       setReady(true);
     })();
-  }, []);
+  }, [supabase]);
+
+  async function saveTimes() {
+    setSavingTimes(true);
+    const { error } = await supabase.from("reminder_prefs").upsert(
+      {
+        morning_time: morning || null,
+        evening_time: evening || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" },
+    );
+    setSavingTimes(false);
+    if (error) {
+      toast.error("저장에 실패했어요");
+      return;
+    }
+    toast.success("알림 시간을 저장했어요");
+  }
 
   async function turnOn() {
     setBusy(true);
@@ -160,6 +191,58 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
       </section>
+
+      {ready && supported && enabled && (
+        <section className="space-y-2">
+          <h2 className="px-1 text-xs font-medium text-muted-foreground">
+            알림 시간
+          </h2>
+          <Card>
+            <CardContent className="space-y-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label htmlFor="morning">아침 계획 알림</Label>
+                  <p className="text-xs text-muted-foreground">
+                    아직 계획을 안 세웠으면 이 시각에 알려줘요
+                  </p>
+                </div>
+                <Input
+                  id="morning"
+                  type="time"
+                  value={morning}
+                  onChange={(e) => setMorning(e.target.value)}
+                  className="w-32"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label htmlFor="evening">저녁 회고 알림</Label>
+                  <p className="text-xs text-muted-foreground">
+                    아직 마감을 안 했으면 이 시각에 알려줘요
+                  </p>
+                </div>
+                <Input
+                  id="evening"
+                  type="time"
+                  value={evening}
+                  onChange={(e) => setEvening(e.target.value)}
+                  className="w-32"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                비워두면 해당 알림은 꺼져요. (시각은 한국 시간 기준)
+              </p>
+              <Button
+                className="w-full"
+                onClick={saveTimes}
+                disabled={savingTimes}
+              >
+                알림 시간 저장
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
+      )}
 
       <section className="space-y-2">
         <h2 className="px-1 text-xs font-medium text-muted-foreground">계정</h2>

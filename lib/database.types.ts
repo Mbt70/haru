@@ -157,6 +157,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      reminder_prefs: {
+        Row: {
+          user_id: string;
+          morning_time: string | null;
+          evening_time: string | null;
+          last_morning: string | null;
+          last_evening: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          user_id?: string;
+          morning_time?: string | null;
+          evening_time?: string | null;
+          last_morning?: string | null;
+          last_evening?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          morning_time?: string | null;
+          evening_time?: string | null;
+          last_morning?: string | null;
+          last_evening?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       push_subscriptions: {
         Row: {
           id: string;
