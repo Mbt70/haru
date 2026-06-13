@@ -29,7 +29,7 @@ import { LoadError } from "@/components/load-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import { LogOut, Plus, Search } from "lucide-react";
+import { Plus, Search, Settings } from "lucide-react";
 import { toast } from "sonner";
 
 type Task = Tables<"tasks">;
@@ -228,11 +228,6 @@ export default function TodayPage() {
     setEditOpen(true);
   }
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
-
   const t = todayStr();
   const planned = !!log?.planned_at;
   const reviewed = !!log?.reviewed_at;
@@ -271,8 +266,10 @@ export default function TodayPage() {
               <Search className="size-4" />
             </Link>
           </Button>
-          <Button variant="ghost" size="icon" onClick={signOut} aria-label="로그아웃">
-            <LogOut className="size-4" />
+          <Button variant="ghost" size="icon" asChild aria-label="설정">
+            <Link href="/settings">
+              <Settings className="size-4" />
+            </Link>
           </Button>
         </div>
       </header>
