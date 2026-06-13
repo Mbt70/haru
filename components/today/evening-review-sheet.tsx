@@ -22,19 +22,21 @@ type DailyLog = Tables<"daily_logs">;
 
 function ReviewForm({
   log,
+  logDate,
   doneTasks,
   leftoverTasks,
   aiSessionCount,
   onDone,
 }: {
-  log: DailyLog;
+  log: DailyLog | null;
+  logDate: string;
   doneTasks: Task[];
   leftoverTasks: Task[];
   aiSessionCount: number;
   onDone: () => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
-  const [reflection, setReflection] = useState(log.reflection ?? "");
+  const [reflection, setReflection] = useState(log?.reflection ?? "");
   const [leftovers, setLeftovers] = useState(leftoverTasks);
   const [saving, setSaving] = useState(false);
 
@@ -54,13 +56,16 @@ function ReviewForm({
 
   async function save() {
     setSaving(true);
-    const { error } = await supabase
-      .from("daily_logs")
-      .update({
+    // upsert라 아침 계획을 건너뛴 날(log 행이 없는 날)에도 회고가 가능하다.
+    // focus/planned_at은 payload에 없으므로 기존 값이 보존된다.
+    const { error } = await supabase.from("daily_logs").upsert(
+      {
+        log_date: logDate,
         reflection: reflection.trim() || null,
         reviewed_at: new Date().toISOString(),
-      })
-      .eq("id", log.id);
+      },
+      { onConflict: "user_id,log_date" },
+    );
     setSaving(false);
     if (error) {
       toast.error("저장에 실패했어요");
@@ -153,6 +158,7 @@ export function EveningReviewSheet({
   open,
   onOpenChange,
   log,
+  logDate,
   doneTasks,
   leftoverTasks,
   aiSessionCount = 0,
@@ -161,6 +167,7 @@ export function EveningReviewSheet({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   log: DailyLog | null;
+  logDate: string;
   doneTasks: Task[];
   leftoverTasks: Task[];
   aiSessionCount?: number;
@@ -175,9 +182,10 @@ export function EveningReviewSheet({
         <SheetHeader>
           <SheetTitle>하루 마무리</SheetTitle>
         </SheetHeader>
-        {open && log && (
+        {open && (
           <ReviewForm
             log={log}
+            logDate={logDate}
             doneTasks={doneTasks}
             leftoverTasks={leftoverTasks}
             aiSessionCount={aiSessionCount}

@@ -34,6 +34,7 @@ function PlanForm({
   const [focus, setFocus] = useState(log?.focus ?? "");
   const [candidates, setCandidates] = useState<Task[]>([]);
   const [goalTitles, setGoalTitles] = useState<Map<string, string>>(new Map());
+  const [lastReflection, setLastReflection] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [initialPlanned, setInitialPlanned] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -43,7 +44,7 @@ function PlanForm({
 
   useEffect(() => {
     (async () => {
-      const [tasksRes, goalsRes] = await Promise.all([
+      const [tasksRes, goalsRes, reflectionRes] = await Promise.all([
         supabase
           .from("tasks")
           .select("*")
@@ -52,6 +53,14 @@ function PlanForm({
           .order("priority")
           .order("created_at", { ascending: false }),
         supabase.from("goals").select("id, title"),
+        supabase
+          .from("daily_logs")
+          .select("reflection")
+          .lt("log_date", t)
+          .not("reflection", "is", null)
+          .order("log_date", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ]);
       if (tasksRes.data) {
         const data = tasksRes.data;
@@ -69,6 +78,9 @@ function PlanForm({
       }
       if (goalsRes.data) {
         setGoalTitles(new Map(goalsRes.data.map((g) => [g.id, g.title])));
+      }
+      if (reflectionRes.data?.reflection) {
+        setLastReflection(reflectionRes.data.reflection);
       }
       setLoading(false);
     })();
@@ -118,6 +130,12 @@ function PlanForm({
 
   return (
     <div className="space-y-4 px-4">
+      {lastReflection && (
+        <div className="rounded-lg bg-muted px-3 py-2">
+          <p className="text-[11px] font-medium text-muted-foreground">어제의 나</p>
+          <p className="mt-0.5 whitespace-pre-wrap text-sm">{lastReflection}</p>
+        </div>
+      )}
       <div className="space-y-2">
         <Label htmlFor="focus">오늘의 포커스 한 줄</Label>
         <Input

@@ -4,10 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/database.types";
 import { formatShortDate } from "@/lib/dates";
+import { sanitizeSearch } from "@/lib/search";
 import { useDataChanged } from "@/lib/events";
 import { SessionCard } from "@/components/sessions/session-card";
 import { CloseSessionSheet } from "@/components/sessions/close-session-sheet";
 import { Input } from "@/components/ui/input";
+import { ListSkeleton } from "@/components/ui/skeleton";
+import { LoadError } from "@/components/load-error";
 import { format, parseISO } from "date-fns";
 
 type AiSession = Tables<"ai_sessions">;
@@ -17,6 +20,7 @@ export default function SessionsPage() {
   const [q, setQ] = useState("");
   const [sessions, setSessions] = useState<AiSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [closing, setClosing] = useState<AiSession | null>(null);
   const [closeOpen, setCloseOpen] = useState(false);
 
@@ -27,14 +31,15 @@ export default function SessionsPage() {
         .select("*")
         .order("started_at", { ascending: false })
         .limit(100);
-      const cleaned = query.trim().replace(/[,()]/g, " ").trim();
+      const cleaned = sanitizeSearch(query);
       if (cleaned) {
         // PostgREST or() 구문은 와일드카드로 *를 쓴다
         builder = builder.or(
           `intent.ilike.*${cleaned}*,outcome.ilike.*${cleaned}*,tool.ilike.*${cleaned}*`,
         );
       }
-      const { data } = await builder;
+      const { data, error } = await builder;
+      setError(!!error);
       if (data) setSessions(data);
       setLoading(false);
     },
@@ -88,7 +93,9 @@ export default function SessionsPage() {
       />
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">불러오는 중...</p>
+        <ListSkeleton rows={3} />
+      ) : error && sessions.length === 0 ? (
+        <LoadError onRetry={() => void load(q)} />
       ) : sessions.length === 0 ? (
         <p className="px-2 text-sm text-muted-foreground">
           {q

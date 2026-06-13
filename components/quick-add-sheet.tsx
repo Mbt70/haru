@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import type { Tables } from "@/lib/database.types";
 import { emitDataChanged } from "@/lib/events";
-import { todayStr, tomorrowStr } from "@/lib/dates";
+import { formatShortDate, todayStr, tomorrowStr } from "@/lib/dates";
+import { sanitizeSearch } from "@/lib/search";
 import {
   Sheet,
   SheetContent,
@@ -119,6 +121,8 @@ function AddTaskForm({ onClose }: { onClose: () => void }) {
 
 const TOOLS = ["Claude Code", "ChatGPT", "Gemini", "기타"] as const;
 
+type AiSession = Tables<"ai_sessions">;
+
 // 의도 게이트 — "왜 쓰는지"를 적는 행위 자체가 무의식적 사용을 막는 개입
 function StartSessionForm({ onClose }: { onClose: () => void }) {
   const supabase = useMemo(() => createClient(), []);
@@ -127,6 +131,39 @@ function StartSessionForm({ onClose }: { onClose: () => void }) {
   const [showExpected, setShowExpected] = useState(false);
   const [expected, setExpected] = useState("");
   const [saving, setSaving] = useState(false);
+  const [openCount, setOpenCount] = useState(0);
+  const [pastMatches, setPastMatches] = useState<AiSession[]>([]);
+
+  // 이미 열려 있는 세션 수 — 게이트 시점에 동시 진행 부담을 알려준다
+  useEffect(() => {
+    (async () => {
+      const { count } = await supabase
+        .from("ai_sessions")
+        .select("id", { count: "exact", head: true })
+        .is("ended_at", null);
+      setOpenCount(count ?? 0);
+    })();
+  }, [supabase]);
+
+  // 비슷한 의도로 이미 끝낸 세션이 있으면 재사용하라고 귀띔 (300ms 디바운스)
+  useEffect(() => {
+    const term = sanitizeSearch(intent);
+    if (term.length < 2) {
+      setPastMatches([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from("ai_sessions")
+        .select("*")
+        .not("ended_at", "is", null)
+        .or(`intent.ilike.*${term}*,outcome.ilike.*${term}*`)
+        .order("started_at", { ascending: false })
+        .limit(2);
+      setPastMatches(data ?? []);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [intent, supabase]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -150,6 +187,11 @@ function StartSessionForm({ onClose }: { onClose: () => void }) {
 
   return (
     <form onSubmit={save} className="space-y-4">
+      {openCount > 0 && (
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-500">
+          진행 중인 세션이 {openCount}개 있어요. 먼저 끝내는 게 어때요?
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         {TOOLS.map((t) => (
           <Chip key={t} selected={tool === t} onClick={() => setTool(t)}>
@@ -163,6 +205,24 @@ function StartSessionForm({ onClose }: { onClose: () => void }) {
         onChange={(e) => setIntent(e.target.value)}
         placeholder="왜 쓰려고 하나요? (필수)"
       />
+      {pastMatches.length > 0 && (
+        <div className="space-y-1.5 rounded-lg border border-dashed px-3 py-2">
+          <p className="text-[11px] font-medium text-muted-foreground">
+            전에 비슷한 걸 한 적이 있어요
+          </p>
+          {pastMatches.map((m) => (
+            <div key={m.id} className="text-xs">
+              <span className="text-foreground">{m.intent}</span>
+              {m.outcome && (
+                <span className="text-muted-foreground"> — {m.outcome}</span>
+              )}
+              <span className="ml-1 text-muted-foreground">
+                ({formatShortDate(m.started_at.slice(0, 10))})
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
       {showExpected ? (
         <Textarea
           value={expected}

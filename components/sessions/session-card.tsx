@@ -1,10 +1,14 @@
 "use client";
 
+import { useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/database.types";
-import { formatTime } from "@/lib/dates";
+import { emitDataChanged } from "@/lib/events";
+import { formatElapsed, formatTime } from "@/lib/dates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { toast } from "sonner";
 
 type AiSession = Tables<"ai_sessions">;
 
@@ -21,7 +25,22 @@ export function SessionCard({
   session: AiSession;
   onCloseRequest?: (session: AiSession) => void;
 }) {
+  const supabase = useMemo(() => createClient(), []);
   const isOpen = session.ended_at === null;
+  const elapsed = isOpen ? formatElapsed(session.started_at) : null;
+
+  async function abandon() {
+    const { error } = await supabase
+      .from("ai_sessions")
+      .update({ ended_at: new Date().toISOString(), result: "abandoned" })
+      .eq("id", session.id);
+    if (error) {
+      toast.error("변경에 실패했어요");
+      return;
+    }
+    emitDataChanged("ai_sessions");
+  }
+
   return (
     <Card className={isOpen ? "border-primary/40" : undefined}>
       <CardContent className="space-y-1.5 py-3">
@@ -42,25 +61,47 @@ export function SessionCard({
             )
           )}
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">
-            {formatTime(session.started_at)}
-            {session.ended_at && `–${formatTime(session.ended_at)}`}
+            {isOpen && elapsed ? (
+              <span className={elapsed.stale ? "text-destructive" : undefined}>
+                {elapsed.text}
+              </span>
+            ) : (
+              <>
+                {formatTime(session.started_at)}
+                {session.ended_at && `–${formatTime(session.ended_at)}`}
+              </>
+            )}
           </span>
         </div>
         <p className="text-sm font-medium">{session.intent}</p>
+        {isOpen && session.expected_outcome && (
+          <p className="text-xs text-muted-foreground">
+            기대: {session.expected_outcome}
+          </p>
+        )}
         {session.outcome && (
           <p className="line-clamp-2 text-sm text-muted-foreground">
             {session.outcome}
           </p>
         )}
         {isOpen && onCloseRequest && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-1"
-            onClick={() => onCloseRequest(session)}
-          >
-            마무리
-          </Button>
+          <div className="flex gap-2 pt-0.5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onCloseRequest(session)}
+            >
+              마무리
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              onClick={abandon}
+            >
+              중단
+            </Button>
+          </div>
         )}
       </CardContent>
     </Card>

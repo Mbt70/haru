@@ -144,6 +144,7 @@ export function MilestoneList({
                   <Checkbox
                     checked={done}
                     onCheckedChange={(checked) => toggle(m, checked === true)}
+                    aria-label={`${m.title} · ${done ? "미완료로 되돌리기" : "완료하기"}`}
                   />
                   <button
                     type="button"

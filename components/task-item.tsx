@@ -4,6 +4,7 @@ import type { Tables } from "@/lib/database.types";
 import { dday, ddayDiff, formatShortDate } from "@/lib/dates";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Task = Tables<"tasks">;
@@ -12,10 +13,12 @@ export function TaskItem({
   task,
   onToggle,
   onSelect,
+  onReschedule,
 }: {
   task: Task;
   onToggle: (task: Task, done: boolean) => void;
   onSelect?: (task: Task) => void;
+  onReschedule?: (task: Task) => void;
 }) {
   const done = task.completed_at !== null;
   const overdue = !done && task.due_date !== null && ddayDiff(task.due_date) < 0;
@@ -25,7 +28,7 @@ export function TaskItem({
       <Checkbox
         checked={done}
         onCheckedChange={(checked) => onToggle(task, checked === true)}
-        aria-label={done ? "미완료로 되돌리기" : "완료하기"}
+        aria-label={`${task.title} · ${done ? "미완료로 되돌리기" : "완료하기"}`}
       />
       <button
         type="button"
@@ -57,6 +60,16 @@ export function TaskItem({
           </span>
         )}
       </button>
+      {onReschedule && !done && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 shrink-0 px-2 text-xs text-muted-foreground"
+          onClick={() => onReschedule(task)}
+        >
+          내일로
+        </Button>
+      )}
     </li>
   );
 }

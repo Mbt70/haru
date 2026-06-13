@@ -5,13 +5,15 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/database.types";
 import { dday, formatShortDate, todayStr } from "@/lib/dates";
-import { useDataChanged } from "@/lib/events";
+import { emitDataChanged, useDataChanged } from "@/lib/events";
 import { TaskItem } from "@/components/task-item";
 import { TaskEditSheet } from "@/components/task-edit-sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ListSkeleton } from "@/components/ui/skeleton";
+import { LoadError } from "@/components/load-error";
 import { ChevronDown, ChevronRight, Flag } from "lucide-react";
 import { toast } from "sonner";
 
@@ -70,6 +72,7 @@ function TasksContent() {
   const [milestones, setMilestones] = useState<MilestoneWithGoal[]>([]);
   const [showDone, setShowDone] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [selected, setSelected] = useState<Task | null>(null);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -95,6 +98,7 @@ function TasksContent() {
         .not("due_date", "is", null)
         .order("due_date"),
     ]);
+    setError(!!(open.error || done.error || ms.error));
     if (open.data) setOpenTasks(open.data);
     if (done.data) setDoneTasks(done.data);
     if (ms.data) setMilestones(ms.data as MilestoneWithGoal[]);
@@ -137,6 +141,21 @@ function TasksContent() {
       toast.error("변경에 실패했어요");
       return;
     }
+    emitDataChanged("milestones");
+    // 실수로 눌러도 되돌릴 수 있게 — 완료된 마일스톤은 목록에서 사라지므로 취소 제공
+    toast.success("마일스톤 완료", {
+      action: {
+        label: "취소",
+        onClick: async () => {
+          await supabase
+            .from("milestones")
+            .update({ completed_at: null })
+            .eq("id", m.id);
+          emitDataChanged("milestones");
+          void load();
+        },
+      },
+    });
     void load();
   }
 
@@ -195,7 +214,9 @@ function TasksContent() {
       </header>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">불러오는 중...</p>
+        <ListSkeleton rows={5} />
+      ) : error && openTasks.length === 0 && doneTasks.length === 0 ? (
+        <LoadError onRetry={load} />
       ) : tab === "list" ? (
         <div className="space-y-6">
           {openTasks.length === 0 && (
@@ -267,9 +288,9 @@ function TasksContent() {
                       className="flex items-center gap-3 rounded-lg px-2 py-2.5"
                     >
                       <Checkbox
-                        checked={false}
+                        checked={item.milestone.completed_at !== null}
                         onCheckedChange={() => toggleMilestone(item.milestone!)}
-                        aria-label="마일스톤 완료"
+                        aria-label={`${item.milestone.title} · 완료하기`}
                       />
                       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="flex items-center gap-1.5 truncate text-sm">

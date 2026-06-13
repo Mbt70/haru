@@ -67,6 +67,11 @@ function CloseForm({
           · {formatTime(session.started_at)} 시작
         </span>
         <p className="mt-1 text-muted-foreground">{session.intent}</p>
+        {session.expected_outcome && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            기대했던 것: {session.expected_outcome}
+          </p>
+        )}
       </div>
       <div className="space-y-2">
         <Label>결과</Label>
