@@ -28,7 +28,8 @@ import { ListSkeleton } from "@/components/ui/skeleton";
 import { LoadError } from "@/components/load-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LogOut, Plus } from "lucide-react";
+import Link from "next/link";
+import { LogOut, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 type Task = Tables<"tasks">;
@@ -264,9 +265,16 @@ export default function TodayPage() {
             )}
           </p>
         </div>
-        <Button variant="ghost" size="icon" onClick={signOut} aria-label="로그아웃">
-          <LogOut className="size-4" />
-        </Button>
+        <div className="flex items-center">
+          <Button variant="ghost" size="icon" asChild aria-label="검색">
+            <Link href="/search">
+              <Search className="size-4" />
+            </Link>
+          </Button>
+          <Button variant="ghost" size="icon" onClick={signOut} aria-label="로그아웃">
+            <LogOut className="size-4" />
+          </Button>
+        </div>
       </header>
 
       {loading ? (

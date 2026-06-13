@@ -35,11 +35,13 @@ function Section({
   tasks,
   onToggle,
   onSelect,
+  onPlanToday,
 }: {
   title: string;
   tasks: Task[];
   onToggle: (task: Task, done: boolean) => void;
   onSelect: (task: Task) => void;
+  onPlanToday?: (task: Task) => void;
 }) {
   if (tasks.length === 0) return null;
   return (
@@ -54,6 +56,7 @@ function Section({
             task={task}
             onToggle={onToggle}
             onSelect={onSelect}
+            onPlanToday={onPlanToday}
           />
         ))}
       </ul>
@@ -159,6 +162,20 @@ function TasksContent() {
     void load();
   }
 
+  async function planToday(task: Task) {
+    const { error } = await supabase
+      .from("tasks")
+      .update({ planned_for: todayStr() })
+      .eq("id", task.id);
+    if (error) {
+      toast.error("변경에 실패했어요");
+      return;
+    }
+    toast("오늘로 가져왔어요");
+    emitDataChanged("tasks");
+    void load();
+  }
+
   function selectTask(task: Task) {
     setSelected(task);
     setEditOpen(true);
@@ -224,10 +241,10 @@ function TasksContent() {
               할 일이 없어요. 아래 + 버튼으로 추가해보세요.
             </p>
           )}
-          <Section title="지연" tasks={overdue} onToggle={toggleTask} onSelect={selectTask} />
-          <Section title="오늘 마감" tasks={dueToday} onToggle={toggleTask} onSelect={selectTask} />
-          <Section title="예정" tasks={upcoming} onToggle={toggleTask} onSelect={selectTask} />
-          <Section title="날짜 없음" tasks={noDate} onToggle={toggleTask} onSelect={selectTask} />
+          <Section title="지연" tasks={overdue} onToggle={toggleTask} onSelect={selectTask} onPlanToday={planToday} />
+          <Section title="오늘 마감" tasks={dueToday} onToggle={toggleTask} onSelect={selectTask} onPlanToday={planToday} />
+          <Section title="예정" tasks={upcoming} onToggle={toggleTask} onSelect={selectTask} onPlanToday={planToday} />
+          <Section title="날짜 없음" tasks={noDate} onToggle={toggleTask} onSelect={selectTask} onPlanToday={planToday} />
 
           {doneTasks.length > 0 && (
             <section>

@@ -14,11 +14,13 @@ export function TaskItem({
   onToggle,
   onSelect,
   onReschedule,
+  onPlanToday,
 }: {
   task: Task;
   onToggle: (task: Task, done: boolean) => void;
   onSelect?: (task: Task) => void;
   onReschedule?: (task: Task) => void;
+  onPlanToday?: (task: Task) => void;
 }) {
   const done = task.completed_at !== null;
   const overdue = !done && task.due_date !== null && ddayDiff(task.due_date) < 0;
@@ -60,6 +62,16 @@ export function TaskItem({
           </span>
         )}
       </button>
+      {onPlanToday && !done && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 shrink-0 px-2 text-xs text-muted-foreground"
+          onClick={() => onPlanToday(task)}
+        >
+          오늘로
+        </Button>
+      )}
       {onReschedule && !done && (
         <Button
           variant="ghost"

@@ -85,14 +85,38 @@ function EditForm({ task, onClose }: { task: Task; onClose: () => void }) {
   }
 
   async function remove() {
+    const snapshot = task; // 실행취소용 원본 스냅샷
     const { error } = await supabase.from("tasks").delete().eq("id", task.id);
     if (error) {
       toast.error("삭제에 실패했어요");
       return;
     }
-    toast("삭제했어요");
     emitDataChanged("tasks");
     onClose();
+    toast("삭제했어요", {
+      action: {
+        label: "취소",
+        onClick: async () => {
+          // 같은 id로 되살린다 (user_id는 default auth.uid())
+          const { error: undoError } = await supabase.from("tasks").insert({
+            id: snapshot.id,
+            title: snapshot.title,
+            notes: snapshot.notes,
+            due_date: snapshot.due_date,
+            planned_for: snapshot.planned_for,
+            priority: snapshot.priority,
+            completed_at: snapshot.completed_at,
+            created_at: snapshot.created_at,
+            goal_id: snapshot.goal_id,
+          });
+          if (undoError) {
+            toast.error("되돌리지 못했어요");
+            return;
+          }
+          emitDataChanged("tasks");
+        },
+      },
+    });
   }
 
   return (
