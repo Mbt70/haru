@@ -20,19 +20,21 @@ import { toast } from "sonner";
 type Task = Tables<"tasks">;
 type DailyLog = Tables<"daily_logs">;
 
+type AiSummary = { count: number; abandoned: number; duplicates: number };
+
 function ReviewForm({
   log,
   logDate,
   doneTasks,
   leftoverTasks,
-  aiSessionCount,
+  aiSummary,
   onDone,
 }: {
   log: DailyLog | null;
   logDate: string;
   doneTasks: Task[];
   leftoverTasks: Task[];
-  aiSessionCount: number;
+  aiSummary: AiSummary;
   onDone: () => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -130,10 +132,19 @@ function ReviewForm({
         </div>
       )}
 
-      {aiSessionCount > 0 && (
-        <p className="text-sm text-muted-foreground">
-          오늘 AI 세션 {aiSessionCount}회
-        </p>
+      {aiSummary.count > 0 && (
+        <div className="space-y-0.5 text-sm text-muted-foreground">
+          <p>
+            오늘 AI 세션 {aiSummary.count}회
+            {aiSummary.abandoned > 0 && ` · 중단 ${aiSummary.abandoned}`}
+          </p>
+          {aiSummary.duplicates >= 2 && (
+            <p className="text-xs">
+              비슷한 의도를 {aiSummary.duplicates}번 — 결과 한 줄 남겨두면 다음엔
+              안 물어도 돼요.
+            </p>
+          )}
+        </div>
       )}
 
       <div className="space-y-2">
@@ -161,7 +172,7 @@ export function EveningReviewSheet({
   logDate,
   doneTasks,
   leftoverTasks,
-  aiSessionCount = 0,
+  aiSummary,
   onSaved,
 }: {
   open: boolean;
@@ -170,7 +181,7 @@ export function EveningReviewSheet({
   logDate: string;
   doneTasks: Task[];
   leftoverTasks: Task[];
-  aiSessionCount?: number;
+  aiSummary: AiSummary;
   onSaved: () => void;
 }) {
   return (
@@ -188,7 +199,7 @@ export function EveningReviewSheet({
             logDate={logDate}
             doneTasks={doneTasks}
             leftoverTasks={leftoverTasks}
-            aiSessionCount={aiSessionCount}
+            aiSummary={aiSummary}
             onDone={() => {
               onOpenChange(false);
               onSaved();

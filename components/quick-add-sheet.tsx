@@ -12,6 +12,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,46 +37,52 @@ const PRIORITIES = [
 // 시트가 닫히면 폼이 언마운트되므로 열릴 때마다 자연스럽게 빈 상태에서 시작
 function AddTaskForm({ onClose }: { onClose: () => void }) {
   const supabase = useMemo(() => createClient(), []);
-  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
   const [when, setWhen] = useState<"" | "today" | "tomorrow">("");
   const [showDue, setShowDue] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState(2);
   const [saving, setSaving] = useState(false);
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault();
-    const t = title.trim();
-    if (!t) return;
+  async function save(e?: React.FormEvent) {
+    e?.preventDefault();
+    // 줄바꿈으로 여러 개 한 번에
+    const titles = text
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (titles.length === 0) return;
     setSaving(true);
-    const { error } = await supabase.from("tasks").insert({
+    const planned_for =
+      when === "today" ? todayStr() : when === "tomorrow" ? tomorrowStr() : null;
+    const rows = titles.map((t) => ({
       title: t,
-      planned_for:
-        when === "today"
-          ? todayStr()
-          : when === "tomorrow"
-            ? tomorrowStr()
-            : null,
+      planned_for,
       due_date: dueDate || null,
       priority,
-    });
+    }));
+    const { error } = await supabase.from("tasks").insert(rows);
     setSaving(false);
     if (error) {
       toast.error("저장에 실패했어요");
       return;
     }
-    toast.success("추가했어요");
+    toast.success(titles.length > 1 ? `${titles.length}개 추가했어요` : "추가했어요");
     emitDataChanged("tasks");
     onClose();
   }
 
   return (
     <form onSubmit={save} className="space-y-4">
-      <Input
+      <Textarea
         autoFocus
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="무엇을 해야 하나요?"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void save();
+        }}
+        rows={2}
+        placeholder="무엇을 해야 하나요? (여러 개는 한 줄에 하나씩)"
       />
       <div className="flex flex-wrap items-center gap-2">
         <Chip
@@ -112,7 +125,7 @@ function AddTaskForm({ onClose }: { onClose: () => void }) {
           </Chip>
         ))}
       </div>
-      <Button type="submit" className="w-full" disabled={saving || !title.trim()}>
+      <Button type="submit" className="w-full" disabled={saving || !text.trim()}>
         추가
       </Button>
     </form>
@@ -130,18 +143,28 @@ function StartSessionForm({ onClose }: { onClose: () => void }) {
   const [intent, setIntent] = useState("");
   const [showExpected, setShowExpected] = useState(false);
   const [expected, setExpected] = useState("");
+  const [goalId, setGoalId] = useState("none");
+  const [goals, setGoals] = useState<{ id: string; title: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [openCount, setOpenCount] = useState(0);
   const [pastMatches, setPastMatches] = useState<AiSession[]>([]);
 
-  // 이미 열려 있는 세션 수 — 게이트 시점에 동시 진행 부담을 알려준다
+  // 열려 있는 세션 수 + 연결 가능한 활성 목표
   useEffect(() => {
     (async () => {
-      const { count } = await supabase
-        .from("ai_sessions")
-        .select("id", { count: "exact", head: true })
-        .is("ended_at", null);
-      setOpenCount(count ?? 0);
+      const [openRes, goalsRes] = await Promise.all([
+        supabase
+          .from("ai_sessions")
+          .select("id", { count: "exact", head: true })
+          .is("ended_at", null),
+        supabase
+          .from("goals")
+          .select("id, title")
+          .eq("status", "active")
+          .order("created_at", { ascending: false }),
+      ]);
+      setOpenCount(openRes.count ?? 0);
+      if (goalsRes.data) setGoals(goalsRes.data);
     })();
   }, [supabase]);
 
@@ -174,6 +197,7 @@ function StartSessionForm({ onClose }: { onClose: () => void }) {
       tool,
       intent: i,
       expected_outcome: expected.trim() || null,
+      goal_id: goalId === "none" ? null : goalId,
     });
     setSaving(false);
     if (error) {
@@ -188,7 +212,7 @@ function StartSessionForm({ onClose }: { onClose: () => void }) {
   return (
     <form onSubmit={save} className="space-y-4">
       {openCount > 0 && (
-        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-500">
+        <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
           진행 중인 세션이 {openCount}개 있어요. 먼저 끝내는 게 어때요?
         </p>
       )}
@@ -222,6 +246,21 @@ function StartSessionForm({ onClose }: { onClose: () => void }) {
             </div>
           ))}
         </div>
+      )}
+      {goals.length > 0 && (
+        <Select value={goalId} onValueChange={setGoalId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="목표에 연결 (선택)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">목표에 연결 안 함</SelectItem>
+            {goals.map((g) => (
+              <SelectItem key={g.id} value={g.id}>
+                {g.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
       {showExpected ? (
         <Textarea

@@ -99,6 +99,9 @@ export type Database = {
           ended_at: string | null;
           result: string | null;
           outcome: string | null;
+          goal_id: string | null;
+          next_step: string | null;
+          parent_id: string | null;
         };
         Insert: {
           id?: string;
@@ -110,6 +113,9 @@ export type Database = {
           ended_at?: string | null;
           result?: string | null;
           outcome?: string | null;
+          goal_id?: string | null;
+          next_step?: string | null;
+          parent_id?: string | null;
         };
         Update: {
           id?: string;
@@ -121,8 +127,19 @@ export type Database = {
           ended_at?: string | null;
           result?: string | null;
           outcome?: string | null;
+          goal_id?: string | null;
+          next_step?: string | null;
+          parent_id?: string | null;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "ai_sessions_goal_id_fkey";
+            columns: ["goal_id"];
+            isOneToOne: false;
+            referencedRelation: "goals";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       goals: {
         Row: {

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, Bell, BellOff, LogOut } from "lucide-react";
+import { ChevronLeft, Bell, BellOff, BookOpen, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
@@ -243,6 +243,16 @@ export default function SettingsPage() {
           </Card>
         </section>
       )}
+
+      <section className="space-y-2">
+        <h2 className="px-1 text-xs font-medium text-muted-foreground">기록</h2>
+        <Button variant="outline" className="w-full justify-start" asChild>
+          <Link href="/reflections">
+            <BookOpen className="size-4" />
+            회고 기록 모아보기
+          </Link>
+        </Button>
+      </section>
 
       <section className="space-y-2">
         <h2 className="px-1 text-xs font-medium text-muted-foreground">계정</h2>

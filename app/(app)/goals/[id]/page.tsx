@@ -5,12 +5,13 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/database.types";
-import { dday, todayStr } from "@/lib/dates";
+import { dday, formatRelativeDay, todayStr } from "@/lib/dates";
 import { useDataChanged } from "@/lib/events";
 import { MilestoneList } from "@/components/goals/milestone-list";
 import { GoalFormSheet } from "@/components/goals/goal-form-sheet";
 import { TaskItem } from "@/components/task-item";
 import { TaskEditSheet } from "@/components/task-edit-sheet";
+import { SessionCard } from "@/components/sessions/session-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ import { toast } from "sonner";
 type Goal = Tables<"goals">;
 type Milestone = Tables<"milestones">;
 type Task = Tables<"tasks">;
+type AiSession = Tables<"ai_sessions">;
 
 export default function GoalDetailPage() {
   const params = useParams<{ id: string }>();
@@ -29,6 +31,7 @@ export default function GoalDetailPage() {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [sessions, setSessions] = useState<AiSession[]>([]);
   const [newTask, setNewTask] = useState("");
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
@@ -36,7 +39,7 @@ export default function GoalDetailPage() {
   const [taskEditOpen, setTaskEditOpen] = useState(false);
 
   const load = useCallback(async () => {
-    const [goalRes, msRes, taskRes] = await Promise.all([
+    const [goalRes, msRes, taskRes, sessionRes] = await Promise.all([
       supabase.from("goals").select("*").eq("id", goalId).maybeSingle(),
       supabase
         .from("milestones")
@@ -51,10 +54,17 @@ export default function GoalDetailPage() {
         .order("completed_at", { ascending: true, nullsFirst: true })
         .order("priority")
         .order("created_at", { ascending: false }),
+      supabase
+        .from("ai_sessions")
+        .select("*")
+        .eq("goal_id", goalId)
+        .order("started_at", { ascending: false })
+        .limit(20),
     ]);
     setGoal(goalRes.data ?? null);
     if (msRes.data) setMilestones(msRes.data);
     if (taskRes.data) setTasks(taskRes.data);
+    if (sessionRes.data) setSessions(sessionRes.data);
     setLoading(false);
   }, [supabase, goalId]);
 
@@ -65,7 +75,12 @@ export default function GoalDetailPage() {
   useDataChanged(
     useCallback(
       (table) => {
-        if (table === "goals" || table === "milestones" || table === "tasks")
+        if (
+          table === "goals" ||
+          table === "milestones" ||
+          table === "tasks" ||
+          table === "ai_sessions"
+        )
           void load();
       },
       [load],
@@ -106,6 +121,16 @@ export default function GoalDetailPage() {
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
   const openTasks = tasks.filter((t) => t.completed_at === null);
   const doneTasks = tasks.filter((t) => t.completed_at !== null);
+
+  // 마지막 작업: 완료한 할 일 / AI 세션 중 가장 최근 활동
+  const activityDates = [
+    ...tasks.filter((t) => t.completed_at).map((t) => t.completed_at!),
+    ...sessions.map((s) => s.started_at),
+  ];
+  const lastTouched =
+    activityDates.length > 0
+      ? activityDates.reduce((a, b) => (a > b ? a : b))
+      : null;
 
   if (!loading && !goal) {
     return (
@@ -172,6 +197,11 @@ export default function GoalDetailPage() {
                 {done}/{total}
               </span>
             </div>
+            {lastTouched && (
+              <p className="text-xs text-muted-foreground">
+                마지막 작업: {formatRelativeDay(lastTouched)}
+              </p>
+            )}
           </header>
 
           <section className="space-y-2">
@@ -220,6 +250,17 @@ export default function GoalDetailPage() {
               ))}
             </ul>
           </section>
+
+          {sessions.length > 0 && (
+            <section className="space-y-2">
+              <h2 className="text-sm font-medium">AI 세션</h2>
+              <div className="space-y-2">
+                {sessions.map((s) => (
+                  <SessionCard key={s.id} session={s} />
+                ))}
+              </div>
+            </section>
+          )}
         </>
       )}
 

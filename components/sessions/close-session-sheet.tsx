@@ -36,6 +36,7 @@ function CloseForm({
   const supabase = useMemo(() => createClient(), []);
   const [result, setResult] = useState<string>("achieved");
   const [outcome, setOutcome] = useState("");
+  const [nextStep, setNextStep] = useState("");
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -46,6 +47,8 @@ function CloseForm({
         ended_at: new Date().toISOString(),
         result,
         outcome: outcome.trim() || null,
+        // 달성이 아니면 "다음 단계"를 남겨 나중에 이어갈 수 있게
+        next_step: result === "achieved" ? null : nextStep.trim() || null,
       })
       .eq("id", session.id);
     setSaving(false);
@@ -97,6 +100,18 @@ function CloseForm({
           placeholder="핵심 결과·결론을 한두 줄로. 같은 질문을 또 하지 않게."
         />
       </div>
+      {result !== "achieved" && (
+        <div className="space-y-2">
+          <Label htmlFor="next-step">다음에 이어서 할 것</Label>
+          <Textarea
+            id="next-step"
+            value={nextStep}
+            onChange={(e) => setNextStep(e.target.value)}
+            rows={2}
+            placeholder="어디서 멈췄고 다음에 뭘 하면 되는지. 나중에 원탭으로 이어가요."
+          />
+        </div>
+      )}
       <Button className="w-full" onClick={save} disabled={saving}>
         세션 마무리
       </Button>

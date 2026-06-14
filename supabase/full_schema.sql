@@ -48,6 +48,7 @@ create table public.ai_sessions (
 alter table public.ai_sessions enable row level security;
 create policy "owner_all" on public.ai_sessions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- 컨텍스트 앵커링 (세션↔목표 연결, 이어가기) — goals보다 뒤에 alter 필요 시 7번 마이그레이션 참고
 
 -- 4) goals + milestones + tasks.goal_id ---------------------------------
 create table public.goals (
@@ -104,3 +105,9 @@ create table public.reminder_prefs (
 alter table public.reminder_prefs enable row level security;
 create policy "owner_all" on public.reminder_prefs
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- 7) ai_sessions 컨텍스트 앵커링 (goals 생성 이후라 여기서 alter) -----------
+alter table public.ai_sessions
+  add column if not exists goal_id   uuid references public.goals (id) on delete set null,
+  add column if not exists next_step text,
+  add column if not exists parent_id uuid references public.ai_sessions (id) on delete set null;

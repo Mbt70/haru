@@ -64,6 +64,17 @@ export function formatTime(iso: string): string {
   return format(parseISO(iso), "HH:mm");
 }
 
+/** ISO 또는 "yyyy-MM-dd" → "오늘" / "어제" / "3일 전" / "2주 전" */
+export function formatRelativeDay(value: string): string {
+  const d = value.length <= 10 ? parseISO(value) : parseISO(value);
+  const diff = differenceInCalendarDays(new Date(), d);
+  if (diff <= 0) return "오늘";
+  if (diff === 1) return "어제";
+  if (diff < 7) return `${diff}일 전`;
+  if (diff < 30) return `${Math.floor(diff / 7)}주 전`;
+  return `${Math.floor(diff / 30)}개월 전`;
+}
+
 /**
  * 세션이 열려 있는 시간 → "방금 시작" / "37분째" / "3시간째" / "2일째 열려 있음".
  * stale=true면 너무 오래 방치된 세션(>=1일 또는 >=4시간)이라 강조 표시 대상.

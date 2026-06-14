@@ -12,6 +12,7 @@ import {
   tomorrowStr,
 } from "@/lib/dates";
 import { emitDataChanged, useDataChanged } from "@/lib/events";
+import { sanitizeSearch } from "@/lib/search";
 import { TaskItem } from "@/components/task-item";
 import { TaskEditSheet } from "@/components/task-edit-sheet";
 import { PlanCard, FocusBanner } from "@/components/today/plan-card";
@@ -49,7 +50,12 @@ export default function TodayPage() {
   const [planOpen, setPlanOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [openSessions, setOpenSessions] = useState<AiSession[]>([]);
-  const [aiTodayCount, setAiTodayCount] = useState(0);
+  const [aiSummary, setAiSummary] = useState({
+    count: 0,
+    abandoned: 0,
+    duplicates: 0,
+  });
+  const [resumable, setResumable] = useState<AiSession[]>([]);
   const [closingSession, setClosingSession] = useState<AiSession | null>(null);
   const [closeOpen, setCloseOpen] = useState(false);
   const [deadlines, setDeadlines] = useState<DeadlineItem[]>([]);
@@ -59,61 +65,104 @@ export default function TodayPage() {
     const t = todayStr();
     const { start, end } = dayRange(t);
     const horizon = dateAfterDays(14);
-    const [logRes, open, done, sessions, aiCount, dueTasks, dueMs, reviewed] =
-      await Promise.all([
-        supabase.from("daily_logs").select("*").eq("log_date", t).maybeSingle(),
-        supabase
-          .from("tasks")
-          .select("*")
-          .is("completed_at", null)
-          .or(`planned_for.eq.${t},due_date.lte.${t}`)
-          .order("priority")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("tasks")
-          .select("*")
-          .gte("completed_at", start)
-          .lt("completed_at", end)
-          .order("completed_at", { ascending: false }),
-        supabase
-          .from("ai_sessions")
-          .select("*")
-          .is("ended_at", null)
-          .order("started_at"),
-        supabase
-          .from("ai_sessions")
-          .select("id", { count: "exact", head: true })
-          .gte("started_at", start)
-          .lt("started_at", end),
-        supabase
-          .from("tasks")
-          .select("id, title, due_date")
-          .is("completed_at", null)
-          .gt("due_date", t)
-          .lte("due_date", horizon)
-          .order("due_date")
-          .limit(3),
-        supabase
-          .from("milestones")
-          .select("id, title, due_date, goals(title)")
-          .is("completed_at", null)
-          .gte("due_date", t)
-          .lte("due_date", horizon)
-          .order("due_date")
-          .limit(3),
-        supabase
-          .from("daily_logs")
-          .select("log_date")
-          .not("reviewed_at", "is", null)
-          .order("log_date", { ascending: false })
-          .limit(400),
-      ]);
+    const [
+      logRes,
+      open,
+      done,
+      sessions,
+      aiToday,
+      dueTasks,
+      dueMs,
+      reviewed,
+      nextStepRes,
+      parentRes,
+    ] = await Promise.all([
+      supabase.from("daily_logs").select("*").eq("log_date", t).maybeSingle(),
+      supabase
+        .from("tasks")
+        .select("*")
+        .is("completed_at", null)
+        .or(`planned_for.eq.${t},due_date.lte.${t}`)
+        .order("priority")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("tasks")
+        .select("*")
+        .gte("completed_at", start)
+        .lt("completed_at", end)
+        .order("completed_at", { ascending: false }),
+      supabase
+        .from("ai_sessions")
+        .select("*")
+        .is("ended_at", null)
+        .order("started_at"),
+      supabase
+        .from("ai_sessions")
+        .select("intent, result")
+        .gte("started_at", start)
+        .lt("started_at", end),
+      supabase
+        .from("tasks")
+        .select("id, title, due_date")
+        .is("completed_at", null)
+        .gt("due_date", t)
+        .lte("due_date", horizon)
+        .order("due_date")
+        .limit(3),
+      supabase
+        .from("milestones")
+        .select("id, title, due_date, goals(title)")
+        .is("completed_at", null)
+        .gte("due_date", t)
+        .lte("due_date", horizon)
+        .order("due_date")
+        .limit(3),
+      supabase
+        .from("daily_logs")
+        .select("log_date")
+        .not("reviewed_at", "is", null)
+        .order("log_date", { ascending: false })
+        .limit(400),
+      // "다음 단계"가 남은 세션 (이어서 할 일 후보)
+      supabase
+        .from("ai_sessions")
+        .select("*")
+        .not("next_step", "is", null)
+        .not("ended_at", "is", null)
+        .order("started_at", { ascending: false })
+        .limit(15),
+      // 이미 이어받은 부모 세션들 (resumed)
+      supabase
+        .from("ai_sessions")
+        .select("parent_id")
+        .not("parent_id", "is", null),
+    ]);
     setError(!!(logRes.error || open.error));
     setLog(logRes.data ?? null);
     if (open.data) setOpenTasks(open.data);
     if (done.data) setDoneTasks(done.data);
     if (sessions.data) setOpenSessions(sessions.data);
-    setAiTodayCount(aiCount.count ?? 0);
+    // 오늘 AI 사용 요약 (회고용)
+    const todaySessions = aiToday.data ?? [];
+    const norm = new Map<string, number>();
+    for (const s of todaySessions) {
+      const k = sanitizeSearch(s.intent ?? "");
+      if (k) norm.set(k, (norm.get(k) ?? 0) + 1);
+    }
+    let duplicates = 0;
+    for (const v of norm.values()) if (v >= 2) duplicates += v;
+    setAiSummary({
+      count: todaySessions.length,
+      abandoned: todaySessions.filter((s) => s.result === "abandoned").length,
+      duplicates,
+    });
+    // 아직 안 이어받은 "다음 단계" 세션
+    const parentIds = new Set(
+      (parentRes.data ?? []).map((r) => r.parent_id).filter(Boolean),
+    );
+    setResumable(
+      (nextStepRes.data ?? []).filter((s) => !parentIds.has(s.id)).slice(0, 3),
+    );
     setStreak(consecutiveStreak((reviewed.data ?? []).map((r) => r.log_date)));
     const items: DeadlineItem[] = [
       ...(dueTasks.data ?? []).map((x) => ({
@@ -223,6 +272,23 @@ export default function TodayPage() {
     emitDataChanged("tasks");
   }
 
+  async function resumeSession(s: AiSession) {
+    setResumable((prev) => prev.filter((x) => x.id !== s.id));
+    const { error } = await supabase.from("ai_sessions").insert({
+      tool: s.tool,
+      intent: s.next_step ?? s.intent,
+      goal_id: s.goal_id,
+      parent_id: s.id,
+    });
+    if (error) {
+      toast.error("시작에 실패했어요");
+      void load();
+      return;
+    }
+    toast.success("이어서 시작했어요");
+    emitDataChanged("ai_sessions");
+  }
+
   function selectTask(task: Task) {
     setSelected(task);
     setEditOpen(true);
@@ -293,6 +359,35 @@ export default function TodayPage() {
               setCloseOpen(true);
             }}
           />
+
+          {resumable.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="px-2 text-xs font-medium text-muted-foreground">
+                이어서 할 일
+              </h2>
+              {resumable.map((s) => (
+                <div
+                  key={s.id}
+                  className="flex items-center gap-3 rounded-xl border px-4 py-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm">{s.next_step}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {s.tool} · {s.intent}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => resumeSession(s)}
+                  >
+                    이어서
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
 
           <form onSubmit={addTask} className="flex gap-2">
             <Input
@@ -391,7 +486,7 @@ export default function TodayPage() {
         logDate={t}
         doneTasks={doneTasks}
         leftoverTasks={leftoverTasks}
-        aiSessionCount={aiTodayCount}
+        aiSummary={aiSummary}
         onSaved={load}
       />
       <CloseSessionSheet

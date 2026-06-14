@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Tables } from "@/lib/database.types";
-import { dday } from "@/lib/dates";
+import { dday, formatRelativeDay } from "@/lib/dates";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -11,7 +11,13 @@ export type GoalWithMilestones = Tables<"goals"> & {
   milestones: { id: string; completed_at: string | null }[];
 };
 
-export function GoalCard({ goal }: { goal: GoalWithMilestones }) {
+export function GoalCard({
+  goal,
+  lastTouched,
+}: {
+  goal: GoalWithMilestones;
+  lastTouched?: string | null;
+}) {
   const total = goal.milestones.length;
   const done = goal.milestones.filter((m) => m.completed_at !== null).length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
@@ -44,6 +50,11 @@ export function GoalCard({ goal }: { goal: GoalWithMilestones }) {
               {done}/{total}
             </span>
           </div>
+          {lastTouched && (
+            <p className="text-[11px] text-muted-foreground">
+              마지막 작업: {formatRelativeDay(lastTouched)}
+            </p>
+          )}
         </CardContent>
       </Card>
     </Link>
