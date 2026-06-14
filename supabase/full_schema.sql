@@ -134,3 +134,14 @@ alter table public.tasks
 create unique index if not exists tasks_routine_day_uniq
   on public.tasks (routine_id, planned_for)
   where routine_id is not null;
+
+-- 9) google_accounts (캘린더 OAuth 토큰, RLS로 클라이언트 차단) -------------
+create table public.google_accounts (
+  user_id       uuid primary key default auth.uid() references auth.users (id) on delete cascade,
+  access_token  text,
+  refresh_token text,
+  expiry        timestamptz,
+  email         text,
+  created_at    timestamptz not null default now()
+);
+alter table public.google_accounts enable row level security;

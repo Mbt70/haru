@@ -13,8 +13,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronLeft, Bell, BellOff, BookOpen, LogOut } from "lucide-react";
+import {
+  ChevronLeft,
+  Bell,
+  BellOff,
+  BookOpen,
+  CalendarDays,
+  LogOut,
+} from "lucide-react";
 import { toast } from "sonner";
+
+type GcalStatus = {
+  configured: boolean;
+  connected: boolean;
+  email: string | null;
+};
 
 export default function SettingsPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -26,8 +39,17 @@ export default function SettingsPage() {
   const [morning, setMorning] = useState("");
   const [evening, setEvening] = useState("");
   const [savingTimes, setSavingTimes] = useState(false);
+  const [gcal, setGcal] = useState<GcalStatus | null>(null);
 
   useEffect(() => {
+    // OAuth 콜백이 ?gcal= 로 돌려주는 결과를 토스트로
+    const q = new URLSearchParams(window.location.search).get("gcal");
+    if (q === "connected") toast.success("구글 캘린더를 연결했어요");
+    else if (q === "error") toast.error("구글 캘린더 연결에 실패했어요");
+    else if (q === "unconfigured")
+      toast.error("서버에 구글 키가 아직 설정되지 않았어요");
+    if (q) window.history.replaceState(null, "", "/settings");
+
     (async () => {
       const ok = pushSupported();
       setSupported(ok);
@@ -44,9 +66,28 @@ export default function SettingsPage() {
         setMorning(data.morning_time ?? "");
         setEvening(data.evening_time ?? "");
       }
+      try {
+        const res = await fetch("/api/gcal/status");
+        if (res.ok) setGcal(await res.json());
+      } catch {
+        // 무시 — 캘린더 섹션만 숨겨짐
+      }
       setReady(true);
     })();
   }, [supabase]);
+
+  async function disconnectGcal() {
+    setBusy(true);
+    try {
+      await fetch("/api/gcal/disconnect", { method: "POST" });
+      setGcal((g) => (g ? { ...g, connected: false, email: null } : g));
+      toast("구글 캘린더 연결을 해제했어요");
+    } catch {
+      toast.error("해제에 실패했어요");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function saveTimes() {
     setSavingTimes(true);
@@ -239,6 +280,49 @@ export default function SettingsPage() {
               >
                 알림 시간 저장
               </Button>
+            </CardContent>
+          </Card>
+        </section>
+      )}
+
+      {gcal && (
+        <section className="space-y-2">
+          <h2 className="px-1 text-xs font-medium text-muted-foreground">
+            구글 캘린더
+          </h2>
+          <Card>
+            <CardContent className="flex items-center gap-3 py-4">
+              <CalendarDays
+                className={
+                  gcal.connected ? "size-5 text-primary" : "size-5 text-muted-foreground"
+                }
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">
+                  {gcal.connected ? "연결됨" : "연결 안 됨"}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {gcal.connected
+                    ? gcal.email
+                    : "마감·일정을 구글 캘린더와 연동해요"}
+                </p>
+              </div>
+              {gcal.connected ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={disconnectGcal}
+                  disabled={busy}
+                >
+                  연결 해제
+                </Button>
+              ) : gcal.configured ? (
+                <Button size="sm" asChild>
+                  <a href="/api/gcal/start">연결하기</a>
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">설정 대기</span>
+              )}
             </CardContent>
           </Card>
         </section>

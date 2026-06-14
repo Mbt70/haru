@@ -219,6 +219,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      google_accounts: {
+        Row: {
+          user_id: string;
+          access_token: string | null;
+          refresh_token: string | null;
+          expiry: string | null;
+          email: string | null;
+          created_at: string;
+        };
+        Insert: {
+          user_id?: string;
+          access_token?: string | null;
+          refresh_token?: string | null;
+          expiry?: string | null;
+          email?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          access_token?: string | null;
+          refresh_token?: string | null;
+          expiry?: string | null;
+          email?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       reminder_prefs: {
         Row: {
           user_id: string;
