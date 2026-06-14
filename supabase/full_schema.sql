@@ -111,3 +111,26 @@ alter table public.ai_sessions
   add column if not exists goal_id   uuid references public.goals (id) on delete set null,
   add column if not exists next_step text,
   add column if not exists parent_id uuid references public.ai_sessions (id) on delete set null;
+
+-- 8) routines (반복 작업 템플릿) -----------------------------------------
+create table public.routines (
+  id             uuid primary key default gen_random_uuid(),
+  user_id        uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  title          text not null,
+  notes          text,
+  priority       smallint not null default 2,
+  goal_id        uuid references public.goals (id) on delete set null,
+  freq           text not null check (freq in ('daily', 'weekly')),
+  weekdays       smallint[],
+  active         boolean not null default true,
+  last_generated date,
+  created_at     timestamptz not null default now()
+);
+alter table public.routines enable row level security;
+create policy "owner_all" on public.routines
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+alter table public.tasks
+  add column if not exists routine_id uuid references public.routines (id) on delete set null;
+create unique index if not exists tasks_routine_day_uniq
+  on public.tasks (routine_id, planned_for)
+  where routine_id is not null;

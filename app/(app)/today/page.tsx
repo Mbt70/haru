@@ -13,6 +13,7 @@ import {
 } from "@/lib/dates";
 import { emitDataChanged, useDataChanged } from "@/lib/events";
 import { sanitizeSearch } from "@/lib/search";
+import { generateDueRoutines } from "@/lib/routines";
 import { TaskItem } from "@/components/task-item";
 import { TaskEditSheet } from "@/components/task-edit-sheet";
 import { PlanCard, FocusBanner } from "@/components/today/plan-card";
@@ -65,6 +66,8 @@ export default function TodayPage() {
     const t = todayStr();
     const { start, end } = dayRange(t);
     const horizon = dateAfterDays(14);
+    // 오늘 해당하는 반복 작업을 먼저 생성 (멱등) — 그래야 아래 조회에 포함됨
+    await generateDueRoutines(supabase);
     const [
       logRes,
       open,

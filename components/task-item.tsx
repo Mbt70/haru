@@ -5,6 +5,7 @@ import { dday, ddayDiff, formatShortDate } from "@/lib/dates";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Repeat } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Task = Tables<"tasks">;
@@ -45,6 +46,9 @@ export function TaskItem({
         >
           {task.priority === 1 && !done && (
             <span className="mr-1.5 inline-block size-1.5 -translate-y-px rounded-full bg-destructive" />
+          )}
+          {task.routine_id && (
+            <Repeat className="mr-1 inline-block size-3 -translate-y-px text-muted-foreground" />
           )}
           {task.title}
         </span>

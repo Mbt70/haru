@@ -12,7 +12,8 @@ export type ChangedTable =
   | "daily_logs"
   | "ai_sessions"
   | "goals"
-  | "milestones";
+  | "milestones"
+  | "routines";
 
 export function emitDataChanged(table: ChangedTable) {
   window.dispatchEvent(new CustomEvent(EVENT, { detail: table }));

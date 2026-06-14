@@ -4,8 +4,10 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Tables } from "@/lib/database.types";
+import Link from "next/link";
 import { dday, formatShortDate, todayStr } from "@/lib/dates";
 import { emitDataChanged, useDataChanged } from "@/lib/events";
+import { generateDueRoutines } from "@/lib/routines";
 import { TaskItem } from "@/components/task-item";
 import { TaskEditSheet } from "@/components/task-edit-sheet";
 import { Button } from "@/components/ui/button";
@@ -14,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ListSkeleton } from "@/components/ui/skeleton";
 import { LoadError } from "@/components/load-error";
-import { ChevronDown, ChevronRight, Flag } from "lucide-react";
+import { ChevronDown, ChevronRight, Flag, Repeat } from "lucide-react";
 import { toast } from "sonner";
 
 type Task = Tables<"tasks">;
@@ -80,6 +82,7 @@ function TasksContent() {
   const [editOpen, setEditOpen] = useState(false);
 
   const load = useCallback(async () => {
+    await generateDueRoutines(supabase);
     const [open, done, ms] = await Promise.all([
       supabase
         .from("tasks")
@@ -115,7 +118,12 @@ function TasksContent() {
   useDataChanged(
     useCallback(
       (table) => {
-        if (table === "tasks" || table === "milestones" || table === "goals")
+        if (
+          table === "tasks" ||
+          table === "milestones" ||
+          table === "goals" ||
+          table === "routines"
+        )
           void load();
       },
       [load],
@@ -221,7 +229,15 @@ function TasksContent() {
   return (
     <div className="space-y-5">
       <header className="space-y-3">
-        <h1 className="text-2xl font-bold tracking-tight">할 일</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold tracking-tight">할 일</h1>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/routines">
+              <Repeat className="size-4" />
+              루틴
+            </Link>
+          </Button>
+        </div>
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="list">목록</TabsTrigger>

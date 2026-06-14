@@ -23,6 +23,7 @@ export type Database = {
           completed_at: string | null;
           created_at: string;
           goal_id: string | null;
+          routine_id: string | null;
         };
         Insert: {
           id?: string;
@@ -35,6 +36,7 @@ export type Database = {
           completed_at?: string | null;
           created_at?: string;
           goal_id?: string | null;
+          routine_id?: string | null;
         };
         Update: {
           id?: string;
@@ -47,6 +49,7 @@ export type Database = {
           completed_at?: string | null;
           created_at?: string;
           goal_id?: string | null;
+          routine_id?: string | null;
         };
         Relationships: [
           {
@@ -57,6 +60,48 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      routines: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          notes: string | null;
+          priority: number;
+          goal_id: string | null;
+          freq: string;
+          weekdays: number[] | null;
+          active: boolean;
+          last_generated: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string;
+          title: string;
+          notes?: string | null;
+          priority?: number;
+          goal_id?: string | null;
+          freq: string;
+          weekdays?: number[] | null;
+          active?: boolean;
+          last_generated?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          notes?: string | null;
+          priority?: number;
+          goal_id?: string | null;
+          freq?: string;
+          weekdays?: number[] | null;
+          active?: boolean;
+          last_generated?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
       };
       daily_logs: {
         Row: {
